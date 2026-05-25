@@ -6,7 +6,7 @@ replicaCount: 2
 
 image:
   repository: 022499014268.dkr.ecr.us-east-1.amazonaws.com/sample-app
-  tag: "346c930d9c3988a201a91b074ce803d3eb3b6787"
+  tag: "3582cedabadf7a284163ae6c4abac16c46cb7e97"
   pullPolicy: IfNotPresent
 
 app:
