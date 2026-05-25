@@ -1,5 +1,8 @@
+# yaml-language-server: $schema=
 # Production overrides
 replicaCount: 3
+ingress:
+  enabled: true
 app:
   environment: prod
 resources:

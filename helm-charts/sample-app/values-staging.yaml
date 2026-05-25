@@ -1,7 +1,10 @@
+# yaml-language-server: $schema=
 # Staging overrides — merged on top of values.yaml by ArgoCD
 replicaCount: 2
 app:
   environment: staging
+ingress:
+  enabled: true
 resources:
   requests:
     cpu: "150m"

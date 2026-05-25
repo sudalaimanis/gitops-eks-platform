@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=
 # Base values — GitHub Actions automatically updates `image.tag` on every push to main.
 # ArgoCD watches this file and syncs the cluster when it changes.
 
@@ -19,7 +20,7 @@ service:
   targetPort: 5000
 
 ingress:
-  enabled: false
+  enabled: true
 
 resources:
   requests:
