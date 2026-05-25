@@ -49,6 +49,12 @@ ArgoCD detects the values.yaml change
 
 ---
 
+## Architecture
+
+![Single Cluster GitOps Architecture](docs/screenshots/architecture-single-cluster.png)
+
+---
+
 ## Repo structure
 
 ```
