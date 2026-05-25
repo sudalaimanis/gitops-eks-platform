@@ -4,7 +4,7 @@
 replicaCount: 2
 
 image:
-  repository: 022499014268.dkr.ecr.ap-south-1.amazonaws.com/sample-app
+  repository: 022499014268.dkr.ecr.us-east-1.amazonaws.com/sample-app
   tag: "latest"
   pullPolicy: IfNotPresent
 
