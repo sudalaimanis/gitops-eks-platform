@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sample-app-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/sudalaimanis/gitops-eks-platform.git
+    targetRevision: HEAD
+    path: helm-charts/sample-app
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml  # prod overrides: more replicas, higher resource limits
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    # No automated: block — prod requires a manual Sync click in the ArgoCD UI
