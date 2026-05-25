@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sample-app-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/sudalaimanis/gitops-eks-platform.git
+    targetRevision: HEAD
+    path: helm-charts/sample-app
+    helm:
+      valueFiles:
+        - values.yaml         # base values (contains the image tag GitHub Actions updates)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true  # ArgoCD creates the `dev` namespace if it doesn't exist

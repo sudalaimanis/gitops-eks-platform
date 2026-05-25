@@ -1,0 +1,46 @@
+# Base values — GitHub Actions automatically updates `image.tag` on every push to main.
+# ArgoCD watches this file and syncs the cluster when it changes.
+
+replicaCount: 2
+
+image:
+  repository: YOUR_ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/sample-app
+  tag: "latest"           # GitHub Actions replaces this with the git SHA on each deploy
+  pullPolicy: IfNotPresent
+
+app:
+  name: sample-app
+  version: "1.0.0"        # GitHub Actions updates this too
+  environment: dev
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 5000
+
+ingress:
+  enabled: false
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "250m"
+    memory: "256Mi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+
+livenessProbe:
+  path: /health
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+readinessProbe:
+  path: /ready
+  initialDelaySeconds: 5
+  periodSeconds: 10

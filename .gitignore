@@ -1,0 +1,39 @@
+# ── Terraform ────────────────────────────────────────────────────────────────
+# State files contain sensitive resource details — never commit these
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfvars        # may contain secrets passed as variables
+*.tfplan
+
+# Lock file IS committed — it pins provider versions (like package-lock.json)
+# DO NOT add .terraform.lock.hcl here
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+app/.venv/
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+# Local test builds — not part of the project
+*.tar
+
+# ── Runtime / OS ─────────────────────────────────────────────────────────────
+nohup.out
+*.log
+.DS_Store
+.env
+.env.*
+# ── Terraform ────────────────────────────────────────────────────────────────
+# State files contain sensitive resource details — never commit these
+terraform/.terraform/

@@ -1,0 +1,27 @@
+# Root ArgoCD application — the "App of Apps" pattern.
+# This single manifest tells ArgoCD to watch the argocd/ folder
+# and automatically create/manage all child apps (dev, staging, prod).
+#
+# Apply this ONCE manually:
+#   kubectl apply -f argocd/app-of-apps.yaml -n argocd
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/sudalaimanis/gitops-eks-platform.git
+    targetRevision: HEAD
+    path: argocd              # ArgoCD watches this folder
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true             # Removes resources deleted from Git
+      selfHeal: true          # Re-syncs if someone manually changes the cluster

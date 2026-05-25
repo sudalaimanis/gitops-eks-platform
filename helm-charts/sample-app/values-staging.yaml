@@ -1,0 +1,11 @@
+# Staging overrides — merged on top of values.yaml by ArgoCD
+replicaCount: 2
+app:
+  environment: staging
+resources:
+  requests:
+    cpu: "150m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
