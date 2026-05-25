@@ -170,7 +170,7 @@ Expected output for `/health`:
 
 Run the tests:
 ```bash
-pytest tests/ -v
+pytest test/ -v
 ```
 
 All 6 tests should pass. If they do, the app is good. Now stop the server (`Ctrl+C`).

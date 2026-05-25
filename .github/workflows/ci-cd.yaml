@@ -34,7 +34,7 @@ jobs:
       - name: Run pytest
         run: |
           cd app
-          pytest tests/ -v
+          pytest test/ -v
 
   # ── Job 2: Build image and push to ECR ───────────────────────────────────
   build-and-push:
