@@ -347,7 +347,7 @@ Watch what happens:
 2. **ArgoCD UI** — `sample-app-dev` and `sample-app-staging` auto-sync and turn green
 3. **Prod** stays yellow — click **Sync** manually when ready
 
-![GitHub Actions Passing](docs/screenshots/GitHub Actions passing.png)
+![GitHub Actions Passing](docs/screenshots/github-actions-passing.png)
 
 Access your environments via the NGINX ELB DNS:
 
@@ -357,7 +357,7 @@ Access your environments via the NGINX ELB DNS:
 | Staging | `http://ELB_DNS/staging/` |
 | Prod | `http://ELB_DNS/prod/` |
 
-![Browser ELB Access](docs/screenshots/Browser ELB access.png)
+![Browser ELB Access](docs/screenshots/browser-elb-access.png)
 
 ---
 
@@ -370,7 +370,7 @@ curl http://ELB_DNS/dev/version
 
 The `/version` response shows the exact git SHA deployed — proof GitOps is working end to end.
 
-![ArgoCD Dev Resource Tree](docs/screenshots/ArgoCD dev resource tree.png)
+![ArgoCD Dev Resource Tree](docs/screenshots/argocd-dev-resource-tree.png)
 
 ![curl version output](docs/screenshots/curl-version-output.png)
 
@@ -415,7 +415,7 @@ watch -n 0.3 'curl -s http://ELB_DNS/dev/simulate/load'
 
 After ~60 seconds the pod count increases automatically. Stop the load and pods scale back down after ~5 minutes.
 
-![HPA Scaling](docs/screenshots/HPA scaling.png)
+![HPA Scaling](docs/screenshots/hpa-scaling.png)
 
 ---
 
@@ -444,14 +444,14 @@ Rollback completes in under 2 minutes.
 kubectl argo rollouts get rollout sample-app -n staging -w
 ```
 
-![Staging Canary Progress](docs/screenshots/Staging canary progress.png)
+![Staging Canary Progress](docs/screenshots/staging-canary-progress.png)
 
 **Promote prod blue-green:**
 ```bash
 kubectl argo rollouts promote sample-app -n prod
 ```
 
-![Prod Blue-Green](docs/screenshots/Prod blue-green.png)
+![Prod Blue-Green](docs/screenshots/prod-blue-green.png)
 
 **Abort and roll back to blue instantly:**
 ```bash
