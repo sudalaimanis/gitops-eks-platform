@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
 name: CI/CD — Build, Test, and Deploy via GitOps
 
 on:
@@ -84,9 +86,8 @@ jobs:
 
       - name: Update image tag in values.yaml
         run: |
+          # Update image.tag — the only thing ArgoCD needs to trigger a redeploy
           sed -i "s|tag:.*|tag: \"${{ github.sha }}\"|" \
-            helm-charts/sample-app/values.yaml
-          sed -i "s|version:.*|version: \"${{ github.sha }}\"|" \
             helm-charts/sample-app/values.yaml
 
       - name: Commit and push

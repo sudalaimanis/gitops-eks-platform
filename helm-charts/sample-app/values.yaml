@@ -4,13 +4,13 @@
 replicaCount: 2
 
 image:
-  repository: YOUR_ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/sample-app
-  tag: "latest"           # GitHub Actions replaces this with the git SHA on each deploy
+  repository: 022499014268.dkr.ecr.ap-south-1.amazonaws.com/sample-app
+  tag: "latest"
   pullPolicy: IfNotPresent
 
 app:
   name: sample-app
-  version: "1.0.0"        # GitHub Actions updates this too
+  version: "1.0.0"
   environment: dev
 
 service:

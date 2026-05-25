@@ -14,6 +14,12 @@ COPY --chown=appuser:appuser app.py .
 
 USER appuser
 
+# Bake git metadata into the image — read by the /version endpoint
+ARG GIT_COMMIT=unknown
+ARG DEPLOYED_AT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV DEPLOYED_AT=${DEPLOYED_AT}
+
 EXPOSE 5000
 
 # gunicorn for production — never use flask dev server in containers
