@@ -70,10 +70,10 @@ spec:
       scaleDownDelaySeconds: 30
     {{- else }}
     canary:
-      steps:
       {{- if .Values.rollout.canary.steps }}
+      steps:
       {{- toYaml .Values.rollout.canary.steps | nindent 6 }}
       {{- else }}
-      []
+      steps: []
       {{- end }}
     {{- end }}
