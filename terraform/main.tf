@@ -9,7 +9,7 @@ provider "aws" {
   region = var.region
 }
 
-variable "region"       { default = "ap-south-1" }
+variable "region"       { default = "us-east-1" }
 variable "cluster_name" { default = "gitops-cluster" }
 
 # ── VPC ───────────────────────────────────────────────────────────────────────
