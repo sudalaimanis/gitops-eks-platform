@@ -9,6 +9,21 @@ spec:
     - port: {{ .Values.service.port }}
       targetPort: {{ .Values.service.targetPort }}
   type: {{ .Values.service.type }}
+{{- if eq .Values.rollout.strategy "blueGreen" }}
+---
+# Preview service — routes traffic to the new (green) version before promotion
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.app.name }}-preview
+spec:
+  selector:
+    app: {{ .Values.app.name }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+  type: {{ .Values.service.type }}
+{{- end }}
 ---
 {{- if .Values.autoscaling.enabled }}
 apiVersion: autoscaling/v2
@@ -17,8 +32,8 @@ metadata:
   name: {{ .Values.app.name }}-hpa
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
     name: {{ .Values.app.name }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}

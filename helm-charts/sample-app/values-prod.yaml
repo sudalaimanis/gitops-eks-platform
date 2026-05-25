@@ -3,6 +3,11 @@
 replicaCount: 3
 ingress:
   enabled: true
+
+rollout:
+  strategy: blueGreen
+  blueGreen:
+    autoPromotionEnabled: false   # requires manual promotion in ArgoCD UI
 app:
   environment: prod
 resources:

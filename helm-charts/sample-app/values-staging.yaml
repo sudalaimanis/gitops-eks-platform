@@ -5,6 +5,18 @@ app:
   environment: staging
 ingress:
   enabled: true
+
+rollout:
+  strategy: canary
+  canary:
+    steps:
+      - setWeight: 10        # send 10% traffic to new version
+      - pause:
+          duration: 60s      # wait 1 min, watch for errors
+      - setWeight: 50        # ramp to 50%
+      - pause:
+          duration: 60s      # wait 1 more min
+                             # then auto-promote to 100%
 resources:
   requests:
     cpu: "150m"

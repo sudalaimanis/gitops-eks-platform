@@ -1,5 +1,5 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: {{ .Values.app.name }}
   labels:
@@ -61,3 +61,17 @@ spec:
             limits:
               cpu: {{ .Values.resources.limits.cpu | quote }}
               memory: {{ .Values.resources.limits.memory | quote }}
+  strategy:
+    {{- if eq .Values.rollout.strategy "blueGreen" }}
+    blueGreen:
+      activeService: {{ .Values.app.name }}
+      previewService: {{ .Values.app.name }}-preview
+      autoPromotionEnabled: {{ .Values.rollout.blueGreen.autoPromotionEnabled }}
+      scaleDownDelaySeconds: 30
+    {{- else }}
+    canary:
+      {{- if .Values.rollout.canary.steps }}
+      steps:
+      {{- toYaml .Values.rollout.canary.steps | nindent 6 }}
+      {{- end }}
+    {{- end }}
