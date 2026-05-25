@@ -7,7 +7,6 @@
 ![Helm](https://img.shields.io/badge/Helm-0F1689?style=flat&logo=helm&logoColor=white)
 ![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=flat&logo=terraform&logoColor=white)
 ![AWS EKS](https://img.shields.io/badge/AWS_EKS-FF9900?style=flat&logo=amazon-aws&logoColor=white)
-![AWS Secrets Manager](https://img.shields.io/badge/Secrets_Manager-FF9900?style=flat&logo=amazon-aws&logoColor=white)
 
 > A production-grade GitOps platform on AWS EKS. Git is the single source of truth — every deployment, rollback, and config change flows through a Git commit. ArgoCD watches the repo and automatically syncs the cluster across multiple environments, eliminating manual `kubectl` deployments and configuration drift.
 
@@ -36,19 +35,16 @@ GitHub Actions runs:
   3. updates image tag in values.yaml → git push
         │
         ▼
-ArgoCD (multi-cluster) detects the values.yaml change
+ArgoCD detects the values.yaml change
         │
-        ├──▶ Auto-syncs DEV cluster/namespace
-        │       └── standard rolling update
+        ├──▶ Auto-syncs DEV namespace
+        │       └── Argo Rollouts: canary (instant promotion)
         │
-        ├──▶ Auto-syncs STAGING cluster/namespace
+        ├──▶ Auto-syncs STAGING namespace
         │       └── Argo Rollouts: canary (10% → 50% → 100%)
         │
         └──▶ PROD waits for manual approval in ArgoCD UI
-                └── Argo Rollouts: blue-green (switch after analysis)
-
-Secrets (DB creds, API keys) pulled from AWS Secrets Manager
-  └── External Secrets Operator syncs → Kubernetes Secrets
+                └── Argo Rollouts: blue-green (manual promote after validation)
 ```
 
 ---
@@ -62,39 +58,34 @@ gitops-eks-platform/
 │   ├── app.py                        # Flask app (health, version, load-sim endpoints)
 │   ├── Dockerfile                    # Container build instructions
 │   ├── requirements.txt
-│   └── tests/
+│   └── test/
 │       └── test_app.py               # pytest tests (must pass before any deploy)
 │
 ├── helm-charts/
 │   └── sample-app/
 │       ├── Chart.yaml
 │       ├── values.yaml               # ← GitHub Actions updates image.tag here
-│       ├── values-staging.yaml       # staging overrides
-│       ├── values-prod.yaml          # prod overrides (more replicas, higher limits)
+│       ├── values-staging.yaml       # staging overrides (canary strategy)
+│       ├── values-prod.yaml          # prod overrides (blue-green strategy)
 │       └── templates/
-│           ├── deployment.yaml       # Helm template → real K8s Deployment
-│           └── service.yaml          # Helm template → Service + HPA
+│           ├── deployment.yaml       # Helm template → Argo Rollout resource
+│           ├── service.yaml          # Helm template → Service + HPA
+│           └── ingress.yaml          # Helm template → NGINX Ingress (path-based routing)
 │
 ├── argocd/
 │   ├── app-of-apps.yaml              # Root app — apply this once to bootstrap
 │   ├── dev.yaml                      # ArgoCD app for dev namespace
 │   ├── staging.yaml                  # ArgoCD app for staging namespace (canary rollout)
 │   ├── prod.yaml                     # ArgoCD app for prod (manual sync, blue-green)
-│   └── rollouts/
-│       ├── staging-rollout.yaml      # Argo Rollouts canary config
-│       └── prod-rollout.yaml         # Argo Rollouts blue-green config
-│
-├── terraform/
-│   └── main.tf                       # EKS cluster + VPC + ECR (all infra as code)
-│
-├── external-secrets/
-│   ├── cluster-secret-store.yaml     # ClusterSecretStore pointing to AWS Secrets Manager
-│   └── external-secret.yaml          # ExternalSecret manifest (what to sync)
+│   └── ingress-nginx.yaml            # ArgoCD app for NGINX Ingress Controller
 │
 └── .github/
     └── workflows/
         └── ci-cd.yaml                # Full pipeline: test → build → push → update helm
 ```
+
+> **Infrastructure as Code:** EKS cluster, VPC, node groups, and ECR are provisioned via a separate Terraform repo:
+> [github.com/sudalaimanis/AWS-EKS-Terraform](https://github.com/sudalaimanis/AWS-EKS-Terraform)
 
 ---
 
@@ -103,7 +94,7 @@ gitops-eks-platform/
 | Tool | Version | Install command / link |
 |---|---|---|
 | AWS CLI | v2+ | `curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && unzip awscliv2.zip && sudo ./aws/install` |
-| Terraform | v1.6+ | `sudo apt install terraform` or [developer.hashicorp.com](https://developer.hashicorp.com/terraform/install) |
+| Terraform | v1.6+ | [github.com/sudalaimanis/AWS-EKS-Terraform](https://github.com/sudalaimanis/AWS-EKS-Terraform) |
 | kubectl | v1.32+ | `sudo snap install kubectl --classic` |
 | Helm | v3.12+ | `curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \| bash` |
 | ArgoCD CLI | v2.9+ | `curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64 && chmod +x argocd && sudo mv argocd /usr/local/bin/` |
@@ -134,7 +125,7 @@ aws configure
 Enter when prompted:
 - AWS Access Key ID → your key
 - AWS Secret Access Key → your secret
-- Default region → `ap-south-1`
+- Default region → `us-east-1`
 - Default output format → `json`
 
 Verify it works:
@@ -198,30 +189,16 @@ docker stop $(docker ps -q --filter ancestor=sample-app:local)
 
 ---
 
-### Step 5 — Provision EKS with Terraform
+### Step 5 — Provision EKS infrastructure
 
-This creates your EKS cluster (v1.32), VPC, and ECR repository on AWS. Takes about 12–15 minutes.
+EKS cluster, VPC, node groups, and ECR repository are provisioned using a dedicated Terraform repo:
 
-```bash
-cd terraform
+**[github.com/sudalaimanis/AWS-EKS-Terraform](https://github.com/sudalaimanis/AWS-EKS-Terraform)**
 
-# Download providers and modules
-terraform init
-
-# See what will be created (no changes yet)
-terraform plan
-
-# Create everything
-terraform apply
+Follow the setup instructions in that repo. Once complete, you will have:
 ```
-
-Type `yes` when asked to confirm.
-
-When it finishes, copy the output values — you'll need them:
-```
-cluster_name     = "gitops-cluster"
-cluster_endpoint = "https://xxxx.gr7.ap-south-1.eks.amazonaws.com"
-ecr_url          = "123456789.dkr.ecr.ap-south-1.amazonaws.com/sample-app"
+cluster_name  = "gitops-cluster"
+ecr_url       = "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/sample-app"
 ```
 
 ---
@@ -230,7 +207,7 @@ ecr_url          = "123456789.dkr.ecr.ap-south-1.amazonaws.com/sample-app"
 
 ```bash
 aws eks update-kubeconfig \
-  --region ap-south-1 \
+  --region us-east-1 \
   --name gitops-cluster
 
 # Verify nodes are up
@@ -239,9 +216,9 @@ kubectl get nodes
 
 Expected output (wait 2–3 minutes if nodes aren't Ready yet):
 ```
-NAME                                       STATUS   ROLES    AGE
-ip-10-0-1-xx.ap-south-1.compute.internal   Ready    <none>   2m
-ip-10-0-2-xx.ap-south-1.compute.internal   Ready    <none>   2m
+NAME                                        STATUS   ROLES    AGE
+ip-10-0-1-xx.us-east-1.compute.internal    Ready    <none>   2m
+ip-10-0-2-xx.us-east-1.compute.internal    Ready    <none>   2m
 ```
 
 ---
@@ -249,14 +226,12 @@ ip-10-0-2-xx.ap-south-1.compute.internal   Ready    <none>   2m
 ### Step 7 — Install ArgoCD on the cluster
 
 ```bash
-# Create namespace
 kubectl create namespace argocd
 
-# Install ArgoCD
 kubectl apply -n argocd \
   -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-# Wait for all pods to be Running (takes ~2 minutes)
+# Wait for all pods to be Running (~2 minutes)
 kubectl get pods -n argocd -w
 ```
 
@@ -269,32 +244,57 @@ kubectl get secret argocd-initial-admin-secret \
   -o jsonpath="{.data.password}" | base64 -d
 ```
 
-Copy that password — you'll need it to log in.
-
-Access the ArgoCD UI:
+Access the ArgoCD UI via the LoadBalancer DNS:
 ```bash
-kubectl port-forward svc/argocd-server -n argocd 8080:443
+kubectl get svc argocd-server -n argocd
 ```
 
-Open `https://localhost:8080` in your browser → accept the certificate warning → login:
-- Username: `admin`
-- Password: paste the one you just copied
+Open the `EXTERNAL-IP` in your browser → login with `admin` and the password above.
 
 ---
 
-### Step 8 — Update values.yaml with your ECR URL
+### Step 8 — Install Argo Rollouts on the cluster
 
-Open `helm-charts/sample-app/values.yaml` and replace the placeholder:
+```bash
+kubectl create namespace argo-rollouts
+kubectl apply -n argo-rollouts \
+  -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
 
-```yaml
-# Change this line:
-repository: YOUR_ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/sample-app
-
-# To your actual ECR URL from Step 5 output:
-repository: 123456789.dkr.ecr.ap-south-1.amazonaws.com/sample-app
+# Verify
+kubectl get pods -n argo-rollouts -w
 ```
 
-Commit and push this change:
+---
+
+### Step 9 — Install NGINX Ingress Controller
+
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --create-namespace \
+  --set controller.service.type=LoadBalancer
+
+# Get your single ELB DNS — this is how you access all environments
+kubectl get svc -n ingress-nginx
+```
+
+Copy the `EXTERNAL-IP` — this is your single entry point for all environments.
+
+---
+
+### Step 10 — Update values.yaml with your ECR URL
+
+Open `helm-charts/sample-app/values.yaml` and set your ECR URL:
+
+```yaml
+image:
+  repository: YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/sample-app
+```
+
+Commit and push:
 ```bash
 git add helm-charts/sample-app/values.yaml
 git commit -m "config: set ECR repository URL"
@@ -303,350 +303,192 @@ git push
 
 ---
 
-### Step 9 — Add GitHub Actions secrets
+### Step 11 — Add GitHub Actions secrets
 
 Go to your GitHub repo → Settings → Secrets and variables → Actions → New repository secret.
-
-Add these 3 secrets:
 
 | Name | Value |
 |---|---|
 | `AWS_ACCESS_KEY_ID` | Your AWS access key |
 | `AWS_SECRET_ACCESS_KEY` | Your AWS secret key |
-| `AWS_REGION` | `ap-south-1` |
+
+> `AWS_REGION` is hardcoded as `us-east-1` in the workflow file — no secret needed for it.
 
 ---
 
-### Step 10 — Set up AWS Secrets Manager
-
-Application secrets (database passwords, API keys) are never stored in Git. AWS Secrets Manager holds them; the External Secrets Operator syncs them into Kubernetes Secrets automatically.
-
-**Store your secrets in AWS:**
-
-```bash
-aws secretsmanager create-secret \
-  --name /gitops-platform/db-password \
-  --secret-string "your-db-password" \
-  --region ap-south-1
-
-aws secretsmanager create-secret \
-  --name /gitops-platform/api-key \
-  --secret-string "your-api-key" \
-  --region ap-south-1
-```
-
-**Install External Secrets Operator on the cluster:**
-
-```bash
-helm repo add external-secrets https://charts.external-secrets.io
-helm repo update
-
-helm install external-secrets external-secrets/external-secrets \
-  -n external-secrets \
-  --create-namespace
-
-# Verify the operator is running
-kubectl get pods -n external-secrets
-```
-
-**Apply the ClusterSecretStore** (tells the operator which AWS account and region to pull from):
-
-```bash
-kubectl apply -f external-secrets/cluster-secret-store.yaml
-```
-
-The `cluster-secret-store.yaml` references the same IAM role your EKS node group uses — Terraform already created it with `secretsmanager:GetSecretValue` permission.
-
-**Apply the ExternalSecret manifest** (which secrets to sync into each namespace):
-
-```bash
-kubectl apply -f external-secrets/external-secret.yaml -n dev
-kubectl apply -f external-secrets/external-secret.yaml -n staging
-kubectl apply -f external-secrets/external-secret.yaml -n prod
-```
-
-Verify the Kubernetes Secrets were created:
-
-```bash
-kubectl get secret app-secrets -n dev
-# Expected: app-secrets   Opaque   2   30s
-```
-
-The operator re-syncs every hour. Any rotation in Secrets Manager propagates to the cluster automatically.
-
----
-
-### Step 11 — Deploy the App-of-Apps (bootstrap ArgoCD)
-
-This single command tells ArgoCD to watch your repo and manage all 3 environments:
+### Step 12 — Deploy the App-of-Apps (bootstrap ArgoCD)
 
 ```bash
 kubectl apply -f argocd/app-of-apps.yaml -n argocd
 ```
 
-Go to the ArgoCD UI (`https://localhost:8080`) — you should see 4 applications appear:
-- `app-of-apps` (the root)
-- `sample-app-dev`
-- `sample-app-staging`
-- `sample-app-prod`
+Open the ArgoCD UI — you should see these apps appear:
+- `app-of-apps` — the root that watches the `argocd/` folder
+- `ingress-nginx` — NGINX Ingress Controller managed by ArgoCD
+- `sample-app-dev` — auto-syncs on every push
+- `sample-app-staging` — auto-syncs with canary rollout
+- `sample-app-prod` — waits for manual Sync click
 
-They will be in `OutOfSync` state because no image has been pushed yet. That's expected — Step 12 triggers the first real deploy.
+![ArgoCD All Apps](docs/screenshots/argocd-apps.png)
 
 ---
 
-### Step 12 — Trigger your first real deployment
-
-Push any small change to `main`:
+### Step 13 — Trigger your first deployment
 
 ```bash
-# Make a tiny change
-echo "# First GitOps deploy" >> app/app.py
+echo "# first deploy" >> app/app.py
 git add app/app.py
-git commit -m "feat: first deployment"
+git commit -m "feat: trigger first gitops deployment"
 git push origin main
 ```
 
-Now watch what happens:
+Watch what happens:
+1. **GitHub → Actions tab** — pipeline runs: test → build → push to ECR → update values.yaml
+2. **ArgoCD UI** — `sample-app-dev` and `sample-app-staging` auto-sync and turn green
+3. **Prod** stays yellow — click **Sync** manually when ready
 
-1. Go to your GitHub repo → Actions tab
-2. You'll see the pipeline running: tests → build → push to ECR → update values.yaml
-3. Go to ArgoCD UI → watch `sample-app-dev` and `sample-app-staging` automatically turn green (Synced)
-4. Prod stays waiting for manual approval
+![GitHub Actions Passing](docs/screenshots/GitHub Actions passing.png)
+
+Access your environments via the NGINX ELB DNS:
+
+| Environment | URL |
+|---|---|
+| Dev | `http://ELB_DNS/dev/` |
+| Staging | `http://ELB_DNS/staging/` |
+| Prod | `http://ELB_DNS/prod/` |
+
+![Browser ELB Access](docs/screenshots/Browser ELB access.png)
 
 ---
 
-### Step 13 — Verify the deployment
+### Step 14 — Verify the deployment
 
 ```bash
-# Check pods are running in dev
-kubectl get pods -n dev
-
-# Port-forward to test the app
-kubectl port-forward svc/sample-app -n dev 8888:80
-
-# In a new terminal — test all endpoints
-curl http://localhost:8888/
-curl http://localhost:8888/health
-curl http://localhost:8888/version
+curl http://ELB_DNS/dev/health
+curl http://ELB_DNS/dev/version
 ```
 
-The `/version` endpoint will show the git SHA that was just deployed:
-```json
-{
-  "version": "a3f8c2d...",
-  "environment": "dev",
-  "git_commit": "a3f8c2d..."
-}
-```
+The `/version` response shows the exact git SHA deployed — proof GitOps is working end to end.
 
-This is proof GitOps is working — the version in the running container matches the commit that triggered the pipeline.
+![ArgoCD Dev Resource Tree](docs/screenshots/ArgoCD dev resource tree.png)
+
+![curl version output](docs/screenshots/curl-version-output.png)
 
 ---
 
-### Step 14 — Deploy to production (manual)
+### Step 15 — Deploy to production (manual)
 
-When you're happy with dev and staging, go to ArgoCD UI:
-1. Click on `sample-app-prod`
-2. Click the `Sync` button
-3. Click `Synchronize`
+1. Click `sample-app-prod` in ArgoCD UI
+2. Click **Sync** → **Synchronize**
+3. A blue-green rollout starts — green stack deploys alongside blue
+4. Validate the green stack, then promote:
 
-Production is now deployed. The manual gate prevents accidental prod deploys.
+```bash
+kubectl argo rollouts promote sample-app -n prod
+```
 
 ---
 
 ## How to demo this in an interview
 
-When an interviewer asks "walk me through a deployment":
-
-1. Show the ArgoCD UI with all 3 environments
+1. Show the ArgoCD UI with all apps green
 2. Make a small code change → push to main
 3. Show GitHub Actions pipeline running live
-4. Show ArgoCD auto-syncing dev and staging
-5. Show the `/version` endpoint before and after — the SHA changes
-6. Show prod waiting for manual approval
-7. Click Sync on prod — show it deploying
+4. Show `sample-app-staging` canary progressing (10% → 50% → 100%)
+5. Show the `/version` endpoint SHA changing after deploy
+6. Show prod blue-green — promote green stack
+7. Show rollback in under 2 minutes via ArgoCD History and Rollback
 
-That sequence demonstrates the entire GitOps flow end-to-end in under 5 minutes.
+That sequence demonstrates the full GitOps flow end-to-end in under 5 minutes.
 
 ---
 
 ## How to test HPA (pod autoscaling)
 
 ```bash
-# Watch pods scale in a separate terminal
+# Watch HPA in a separate terminal
 kubectl get hpa -n dev -w
 
-# Generate load in another terminal
-watch -n 0.3 'curl -s http://localhost:8888/simulate/load'
+# Generate load
+watch -n 0.3 'curl -s http://ELB_DNS/dev/simulate/load'
 ```
 
-After ~60 seconds you'll see the pod count increase automatically. Stop the load and pods scale back down after ~5 minutes.
+After ~60 seconds the pod count increases automatically. Stop the load and pods scale back down after ~5 minutes.
+
+![HPA Scaling](docs/screenshots/HPA scaling.png)
 
 ---
 
 ## How to do a rollback
 
 In the ArgoCD UI:
-1. Click on `sample-app-dev`
-2. Click `History and Rollback`
-3. Find the previous working version
-4. Click `Rollback`
+1. Click `sample-app-dev`
+2. Click **History and Rollback**
+3. Find the previous version
+4. Click **Rollback**
 
-Rollback completes in under 2 minutes — ArgoCD just re-applies the old Helm values with the old image tag.
+Rollback completes in under 2 minutes.
 
 ---
 
 ## Progressive delivery with Argo Rollouts
 
-This platform uses Argo Rollouts instead of the default Kubernetes `Deployment` for controlled, risk-reduced releases.
+| Environment | Strategy | Behaviour |
+|---|---|---|
+| dev | Canary (no steps) | Instant promotion — fast feedback loop |
+| staging | Canary (10%→50%→100%) | Gradual traffic shift with 60s pauses |
+| prod | Blue-Green | Green stack runs alongside blue, manual promotion required |
 
-### Install Argo Rollouts
-
-```bash
-kubectl create namespace argo-rollouts
-kubectl apply -n argo-rollouts \
-  -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
-```
-
-### Canary strategy (staging)
-
-The staging `values-staging.yaml` configures a canary rollout — traffic shifts gradually before full promotion:
-
-```yaml
-rollout:
-  strategy: canary
-  steps:
-    - setWeight: 10    # send 10% of traffic to new version
-    - pause: {duration: 60s}
-    - setWeight: 50    # ramp to 50%
-    - pause: {duration: 60s}
-    - setWeight: 100   # full promotion
-```
-
-Watch the rollout progress:
+**Watch staging canary:**
 ```bash
 kubectl argo rollouts get rollout sample-app -n staging -w
 ```
 
-### Blue-green strategy (prod)
+![Staging Canary Progress](docs/screenshots/Staging canary progress.png)
 
-Production uses blue-green — the new version (green) runs alongside the old (blue) until you manually promote:
-
-```yaml
-rollout:
-  strategy: blueGreen
-  autoPromotionEnabled: false   # requires manual promotion
-  scaleDownDelaySeconds: 30
-```
-
-Promote after validating the green stack:
+**Promote prod blue-green:**
 ```bash
 kubectl argo rollouts promote sample-app -n prod
 ```
 
-Abort and instantly roll back to blue:
+![Prod Blue-Green](docs/screenshots/Prod blue-green.png)
+
+**Abort and roll back to blue instantly:**
 ```bash
 kubectl argo rollouts abort sample-app -n prod
 ```
 
 ---
 
-## Secrets management with AWS Secrets Manager
-
-Secrets are never stored in Git. The External Secrets Operator syncs values from AWS Secrets Manager into Kubernetes Secrets at runtime.
-
-### How it flows
-
-```
-AWS Secrets Manager
-  └── /gitops-platform/db-password
-  └── /gitops-platform/api-key
-          │
-          ▼  (External Secrets Operator polls every 1h)
-Kubernetes Secret (in each namespace)
-          │
-          ▼
-Pod mounts secret as env var
-```
-
-### Store a secret in AWS
-
-```bash
-aws secretsmanager create-secret \
-  --name /gitops-platform/db-password \
-  --secret-string "your-db-password" \
-  --region ap-south-1
-```
-
-### ExternalSecret manifest
-
-The `ExternalSecret` resource (committed to Git, secrets are not) tells the operator what to fetch:
-
-```yaml
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: app-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: aws-secretsmanager
-    kind: ClusterSecretStore
-  target:
-    name: app-secrets          # creates this Kubernetes Secret
-  data:
-    - secretKey: DB_PASSWORD
-      remoteRef:
-        key: /gitops-platform/db-password
-```
-
-### Install External Secrets Operator
-
-```bash
-helm repo add external-secrets https://charts.external-secrets.io
-helm install external-secrets external-secrets/external-secrets \
-  -n external-secrets --create-namespace
-```
-
----
-
 ## Multi-cluster support
 
-ArgoCD is configured to manage multiple EKS clusters from a single control plane. Each cluster is registered and targeted by the ArgoCD `Application` manifests.
-
-Register an additional cluster:
-```bash
-# Log in to ArgoCD CLI
-argocd login localhost:8080 --username admin --password <password> --insecure
-
-# Add the second cluster (must have kubeconfig context set up)
-argocd cluster add <context-name> --name staging-cluster
-```
-
-Each ArgoCD app (dev/staging/prod) targets its cluster via the `destination.server` field in the app manifest:
+The ArgoCD app manifests are ready for multi-cluster. Each app targets its cluster via `destination.server`:
 
 ```yaml
 destination:
-  server: https://<cluster-endpoint>.eks.amazonaws.com   # per-cluster endpoint
+  server: https://<cluster-endpoint>.eks.amazonaws.com
   namespace: prod
 ```
 
-This means one ArgoCD instance drives deployments to all environments across different clusters — a single pane of glass.
+To add a cluster:
+```bash
+argocd cluster add <context-name> --name prod-cluster
+```
+
+Then update `destination.server` in `argocd/prod.yaml` to the new cluster's API endpoint. Everything else — CI pipeline, Helm charts, ArgoCD apps — stays exactly the same.
 
 ---
 
 ## Cleanup (avoid AWS charges)
 
 ```bash
-# Delete ArgoCD apps first
+# Delete ArgoCD apps
 kubectl delete -f argocd/app-of-apps.yaml -n argocd
 
-# Destroy all AWS infrastructure
-cd terraform
-terraform destroy
+# Destroy EKS infrastructure
+# Follow cleanup instructions at:
+# https://github.com/sudalaimanis/AWS-EKS-Terraform
 ```
-
-Type `yes` to confirm. This deletes the EKS cluster, VPC, and ECR repository.
 
 ---
 
